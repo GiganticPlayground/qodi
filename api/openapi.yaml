@@ -28,7 +28,7 @@ info:
 
     - The QR code contains ciphertext only. No plaintext payload or visible expiration hint is exposed in the QR itself.
     - Expiration is tamper-resistant because the `exp` field lives inside the encrypted payload.
-    - Decrypt responses intentionally do not distinguish between malformed ciphertext, failed deserialization, and expiration. These cases all return `TOKEN_INVALID`.
+    - Decrypt responses intentionally do not distinguish between malformed ciphertext, failed deserialization, and expiration. These cases all return `PAYLOAD_INVALID`.
     - The private key never leaves the backend.
 
     ## Authentication model
@@ -149,7 +149,7 @@ paths:
         ### Response behavior
 
         - If the ciphertext is valid and `exp` is still in the future, the endpoint returns `success: true` plus the original `data` and `exp`.
-        - If the ciphertext is malformed, cannot be decrypted, cannot be parsed, or has expired, the endpoint still returns HTTP `200` with `success: false` and `error: "TOKEN_INVALID"`.
+        - If the ciphertext is malformed, cannot be decrypted, cannot be parsed, or has expired, the endpoint still returns HTTP `200` with `success: false` and `error: "PAYLOAD_INVALID"`.
 
         This intentionally hides the difference between invalid and expired tokens so callers cannot use response shape or status codes to probe token validity.
 
@@ -193,7 +193,7 @@ paths:
                 invalid:
                   value:
                     success: false
-                    error: TOKEN_INVALID
+                    error: PAYLOAD_INVALID
         '400':
           description: Request body failed schema validation before decrypt logic ran
           content:
@@ -367,7 +367,7 @@ components:
           const: false
         error:
           type: string
-          const: TOKEN_INVALID
+          const: PAYLOAD_INVALID
           description: Opaque failure code used for malformed, undecryptable, or expired payloads
     ServerTime:
       type: object

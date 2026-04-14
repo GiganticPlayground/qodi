@@ -76,7 +76,7 @@ The decryption engine:
 - decrypts it with the configured private key
 - parses the decrypted JSON
 - validates the embedded `exp` timestamp
-- returns either the original payload or `TOKEN_INVALID`
+- returns either the original payload or `PAYLOAD_INVALID`
 
 Implementation:
 - [src/services/qodi.service.ts](/Users/daniellmorris/work/gigaplay/os/qodi/src/services/qodi.service.ts)
@@ -130,13 +130,13 @@ Opaque failure response:
 ```json
 {
   "success": false,
-  "error": "TOKEN_INVALID"
+  "error": "PAYLOAD_INVALID"
 }
 ```
 
 Important behavioral decision:
 - Qodi returns HTTP `200` for both successful decrypts and invalid or expired tokens
-- invalid ciphertext, parse failures, and expiration all collapse to the same `TOKEN_INVALID` result
+- invalid ciphertext, parse failures, and expiration all collapse to the same `PAYLOAD_INVALID` result
 
 That behavior is implemented deliberately to avoid leaking token validity signals through status codes or detailed error messages.
 
@@ -213,7 +213,7 @@ Current logic:
 - decrypt token
 - parse `{ data, exp }`
 - compute `now = floor(Date.now() / 1000)`
-- if `now >= exp + QODI_CLOCK_SKEW_SECONDS`, return `TOKEN_INVALID`
+- if `now >= exp + QODI_CLOCK_SKEW_SECONDS`, return `PAYLOAD_INVALID`
 
 This means `QODI_CLOCK_SKEW_SECONDS` acts as a post-expiration grace window. In effect, a token remains acceptable until `exp + skew`.
 
@@ -295,7 +295,7 @@ sequenceDiagram
     Service->>Keys: load private key
     Keys-->>Service: PEM
     Service->>Service: base64-decode → RSA-OAEP decrypt → parse JSON → check exp
-    Service-->>Scanner: { success: true, data, exp } or { success: false, error: "TOKEN_INVALID" }
+    Service-->>Scanner: { success: true, data, exp } or { success: false, error: "PAYLOAD_INVALID" }
 ```
 
 ### 7.1 Public Key Retrieval
@@ -313,7 +313,7 @@ sequenceDiagram
 4. Controller calls `qodiService.decryptQodiPayload(qodiPayload)`.
 5. Service base64-decodes, decrypts, parses JSON, checks expiration, and returns either:
    - `{ success: true, data, exp }`
-   - `{ success: false, error: "TOKEN_INVALID" }`
+   - `{ success: false, error: "PAYLOAD_INVALID" }`
 
 ### 7.3 Server Time Flow
 
@@ -340,7 +340,7 @@ All of these return:
 ```json
 {
   "success": false,
-  "error": "TOKEN_INVALID"
+  "error": "PAYLOAD_INVALID"
 }
 ```
 

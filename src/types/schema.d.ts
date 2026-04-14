@@ -84,7 +84,7 @@ export interface paths {
          *     ### Response behavior
          *
          *     - If the ciphertext is valid and `exp` is still in the future, the endpoint returns `success: true` plus the original `data` and `exp`.
-         *     - If the ciphertext is malformed, cannot be decrypted, cannot be parsed, or has expired, the endpoint still returns HTTP `200` with `success: false` and `error: "TOKEN_INVALID"`.
+         *     - If the ciphertext is malformed, cannot be decrypted, cannot be parsed, or has expired, the endpoint still returns HTTP `200` with `success: false` and `error: "PAYLOAD_INVALID"`.
          *
          *     This intentionally hides the difference between invalid and expired tokens so callers cannot use response shape or status codes to probe token validity.
          *
@@ -162,7 +162,7 @@ export interface components {
              * @description Opaque failure code used for malformed, undecryptable, or expired payloads
              * @constant
              */
-            error: "TOKEN_INVALID";
+            error: "PAYLOAD_INVALID";
         };
         ServerTime: {
             /** @description Current server time in epoch milliseconds */

@@ -11,7 +11,7 @@ type DecryptedPayload = {
 
 type InvalidDecryptResponse = {
   success: false;
-  error: 'TOKEN_INVALID';
+  error: 'PAYLOAD_INVALID';
 };
 
 type SuccessDecryptResponse = {
@@ -112,7 +112,7 @@ export class QodiService {
       if (ciphertext.length === 0) {
         return {
           success: false,
-          error: 'TOKEN_INVALID',
+          error: 'PAYLOAD_INVALID',
         };
       }
 
@@ -129,7 +129,7 @@ export class QodiService {
       if (!payload) {
         return {
           success: false,
-          error: 'TOKEN_INVALID',
+          error: 'PAYLOAD_INVALID',
         };
       }
 
@@ -137,7 +137,7 @@ export class QodiService {
       if (now >= payload.exp + config.QODI_CLOCK_SKEW_SECONDS) {
         return {
           success: false,
-          error: 'TOKEN_INVALID',
+          error: 'PAYLOAD_INVALID',
         };
       }
 
@@ -149,7 +149,7 @@ export class QodiService {
     } catch {
       return {
         success: false,
-        error: 'TOKEN_INVALID',
+        error: 'PAYLOAD_INVALID',
       };
     }
   }

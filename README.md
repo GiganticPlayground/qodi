@@ -35,7 +35,7 @@ Tradeoffs:
 
 Qodi exposes four HTTP surfaces:
 - `GET /qodi/publickey` returns the PEM public key and algorithm identifier used by clients for encryption
-- `POST /qodi/decrypt` decrypts a base64-encoded `qodiPayload`, validates expiration, and returns either the payload or `TOKEN_INVALID`
+- `POST /qodi/decrypt` decrypts a base64-encoded `qodiPayload`, validates expiration, and returns either the payload or `PAYLOAD_INVALID`
 - `GET /qodi/servertime` returns the server's current epoch-millisecond and ISO timestamps so QR issuers can align expirations with server time
 - `GET /health` provides an operational liveness endpoint for the service itself
 
@@ -56,7 +56,7 @@ sequenceDiagram
     Issuer->>Scanner: Render QR code
     Scanner->>Qodi: POST /qodi/decrypt { qodiPayload }
     Qodi->>Qodi: Decrypt and validate exp
-    Qodi-->>Scanner: success payload or TOKEN_INVALID
+    Qodi-->>Scanner: success payload or PAYLOAD_INVALID
 ```
 
 ## How It Works
@@ -65,7 +65,7 @@ sequenceDiagram
 2. The client builds a JSON payload like `{ "data": ..., "exp": 1745000000 }`.
 3. The client serializes and encrypts that JSON with the public key, base64-encodes the ciphertext, and places the result into a QR code.
 4. A scanner reads the QR code and sends the base64 ciphertext to `POST /qodi/decrypt`.
-5. Qodi decrypts the ciphertext with the private key, validates the embedded `exp`, and returns either the original payload or `{ "success": false, "error": "TOKEN_INVALID" }`.
+5. Qodi decrypts the ciphertext with the private key, validates the embedded `exp`, and returns either the original payload or `{ "success": false, "error": "PAYLOAD_INVALID" }`.
 
 The expiration is protected because it lives inside the encrypted payload. A caller cannot extend the lifetime of a code without invalidating the ciphertext.
 
