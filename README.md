@@ -85,6 +85,14 @@ Requests must send a JWT that Qodi validates against a configured static HMAC se
 
 Requests must send a JWT whose signing key is resolved from a remote JWKS endpoint. Qodi caches the JWKS and refreshes it when needed. This is the best fit for identity-provider-backed deployments with rotating keys.
 
+## Examples
+
+| Example | Description |
+|---|---|
+| [Flutter demo](examples/flutter-demo) | Mobile app that fetches the public key, generates encrypted QR payloads, renders them, and scans and decrypts them via the backend |
+
+See the [Getting Started guide](docs/getting-started.md) for instructions on running the Flutter demo alongside the backend.
+
 ## Docs
 
 - [Getting Started](docs/getting-started.md) — step-by-step guide for running the backend with Docker Compose and running the Flutter demo app
