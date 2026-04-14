@@ -1,0 +1,407 @@
+openapi: 3.1.1
+info:
+  title: Qodi API
+  version: 1.0.0
+  summary: Encrypted time-based QR code decryption service
+  description: |
+    Qodi is a backend service for encrypted, time-limited QR codes.
+
+    Standard QR codes are static, readable by anyone, and never expire. Qodi changes that model by requiring the QR payload to be encrypted with the service's public key and by embedding an expiration timestamp inside the encrypted payload itself. Only the backend holds the private key needed to decrypt and validate the payload.
+
+    ## Core operating model
+
+    1. A client authenticates and fetches the current public key from `GET /qodi/publickey`.
+    2. The client builds a payload shaped like:
+
+       ```json
+       {
+         "data": "<application-defined payload>",
+         "exp": 1745000000
+       }
+       ```
+
+    3. The client serializes that payload to JSON, encrypts it with the public key, base64-encodes the ciphertext, and encodes the result as a QR code.
+    4. A scanner reads the QR code and sends the ciphertext as `qodiPayload` to `POST /qodi/decrypt`.
+    5. Qodi decrypts the ciphertext, checks the embedded expiration against server time, and returns either the original payload or a generic invalid response.
+
+    ## Security properties
+
+    - The QR code contains ciphertext only. No plaintext payload or visible expiration hint is exposed in the QR itself.
+    - Expiration is tamper-resistant because the `exp` field lives inside the encrypted payload.
+    - Decrypt responses intentionally do not distinguish between malformed ciphertext, failed deserialization, and expiration. These cases all return `TOKEN_INVALID`.
+    - The private key never leaves the backend.
+
+    ## Authentication model
+
+    All `/qodi/*` endpoints require bearer authentication. The deployment chooses exactly one auth mode:
+
+    - `static-token`: constant-time comparison with a shared bearer token
+    - `jwt-static`: JWT validation with a configured HMAC secret or public key
+    - `jwt-jwks`: JWT validation against a remote JWKS endpoint with caching
+
+    ## Operational notes
+
+    - Decryption requires a network call by design. Offline decryption would require distributing the private key.
+    - Qodi does not provide token revocation or replay protection. If single-use or revocation is required, that must be implemented by the calling application.
+    - The service exposes `GET /health` as an unauthenticated operational endpoint.
+  contact:
+    name: Dan Morris
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+tags:
+  - name: Qodi
+    description: |
+      Public key retrieval, decrypt operations, and authoritative server time for clients issuing Qodi-compatible QR codes.
+  - name: System
+    description: |
+      Operational health endpoints for orchestration and monitoring.
+security:
+  - BearerAuth: []
+paths:
+  /health:
+    get:
+      summary: Health check endpoint
+      description: |
+        Returns a lightweight liveness response for orchestration, uptime monitoring, and local development checks.
+
+        This endpoint is intentionally unauthenticated so that load balancers, containers, and health probes can call it without bearer credentials.
+      tags:
+        - System
+      security: []
+      operationId: getHealth
+      x-eov-operation-id: getHealth
+      x-eov-operation-handler: healthController
+      responses:
+        '200':
+          description: Service is running and able to handle requests
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthCheck'
+              examples:
+                ok:
+                  value:
+                    status: ok
+                    timestamp: '2026-04-14T12:00:00.000Z'
+                    service: qodi
+  /qodi/publickey:
+    get:
+      summary: Return the active public encryption key
+      description: |
+        Returns the PEM-encoded public key and the algorithm identifier clients should use when producing Qodi-compatible encrypted QR payloads.
+
+        ### Why this endpoint exists
+
+        Qodi is designed so that QR code generation can happen outside the backend. Any authorized client can fetch the public key, encrypt a payload, and render the ciphertext as a QR code. The backend keeps the private key and is the only party that can decrypt.
+
+        ### Client guidance
+
+        - Cache the public key if appropriate for your deployment.
+        - Re-fetch it if decryption failures suggest key rotation or key mismatch.
+        - Use the returned `algorithm` value to choose the correct encryption routine.
+        - Qodi currently supports `RSA-OAEP`, `RSA-OAEP-SHA256`, `RSA-OAEP-SHA384`, and `RSA-OAEP-SHA512`. `RSA-OAEP-SHA256` is the recommended default for new deployments.
+      tags:
+        - Qodi
+      operationId: getPublicKey
+      x-eov-operation-id: getPublicKey
+      x-eov-operation-handler: qodiController
+      responses:
+        '200':
+          description: Current public key and algorithm identifier
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicKeyResponse'
+              examples:
+                rsaOaep:
+                  value:
+                    publicKey: |-
+                      -----BEGIN PUBLIC KEY-----
+                      MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAtExampleOnlyDoNotUse
+                      -----END PUBLIC KEY-----
+                    algorithm: RSA-OAEP-SHA256
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /qodi/decrypt:
+    post:
+      summary: Decrypt a Qodi payload and enforce expiration
+      description: |
+        Accepts a base64-encoded ciphertext, decrypts it with the private key held by the server, deserializes the original Qodi payload, and validates the embedded expiration timestamp.
+
+        ### Expected encrypted payload structure
+
+        Before encryption, callers are expected to encrypt JSON shaped like:
+
+        ```json
+        {
+          "data": "<application-defined payload>",
+          "exp": 1745000000
+        }
+        ```
+
+        ### Response behavior
+
+        - If the ciphertext is valid and `exp` is still in the future, the endpoint returns `success: true` plus the original `data` and `exp`.
+        - If the ciphertext is malformed, cannot be decrypted, cannot be parsed, or has expired, the endpoint still returns HTTP `200` with `success: false` and `error: "TOKEN_INVALID"`.
+
+        This intentionally hides the difference between invalid and expired tokens so callers cannot use response shape or status codes to probe token validity.
+
+        ### Supported encryption algorithms
+
+        Qodi decrypts payloads generated with the configured `QODI_ALGORITHM`. Supported values are `RSA-OAEP`, `RSA-OAEP-SHA256`, `RSA-OAEP-SHA384`, and `RSA-OAEP-SHA512`.
+      tags:
+        - Qodi
+      operationId: postDecrypt
+      x-eov-operation-id: postDecrypt
+      x-eov-operation-handler: qodiController
+      requestBody:
+        required: true
+        description: Base64-encoded ciphertext extracted from a scanned QR code or another client transport.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DecryptRequest'
+            examples:
+              decrypt:
+                value:
+                  qodiPayload: bXktYmFzZTY0LWVuY29kZWQtY2lwaGVydGV4dA==
+      responses:
+        '200':
+          description: |
+            Success or opaque decrypt failure. Qodi intentionally returns HTTP 200 in both cases.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/DecryptSuccess'
+                  - $ref: '#/components/schemas/DecryptInvalid'
+              examples:
+                valid:
+                  value:
+                    success: true
+                    data:
+                      visitId: evt_123
+                      holder: guest-42
+                    exp: 1776139200
+                invalid:
+                  value:
+                    success: false
+                    error: TOKEN_INVALID
+        '400':
+          description: Request body failed schema validation before decrypt logic ran
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /qodi/servertime:
+    get:
+      summary: Return the backend's current authoritative time
+      description: |
+        Returns the current server time in epoch milliseconds and ISO 8601 UTC format.
+
+        Clients that issue QR codes should call this endpoint before constructing a Qodi payload if they need the `exp` timestamp to align with the backend's clock rather than device-local time. This is especially useful for mobile or kiosk devices where clock drift is common.
+      tags:
+        - Qodi
+      operationId: getServerTime
+      x-eov-operation-id: getServerTime
+      x-eov-operation-handler: qodiController
+      responses:
+        '200':
+          description: Current authoritative server time
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServerTime'
+              examples:
+                current:
+                  value:
+                    epochMs: 1776139200000
+                    iso: '2026-04-14T12:00:00.000Z'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: opaque token or JWT
+      description: |
+        Bearer token authentication. The concrete validation behavior depends on deployment configuration:
+
+        - static shared bearer token
+        - JWT validated against a static secret or public key
+        - JWT validated using a remote JWKS endpoint
+  responses:
+    Unauthorized:
+      description: Missing or invalid bearer authentication
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            unauthorized:
+              value:
+                message: Bearer token is invalid
+                code: HTTP_ERROR
+    Forbidden:
+      description: Valid authentication without sufficient permission. Reserved for future authorization policies.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            forbidden:
+              value:
+                message: Access denied
+                code: HTTP_ERROR
+    InternalServerError:
+      description: Unexpected internal failure
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            internal:
+              value:
+                message: Internal server error
+    ServiceUnavailable:
+      description: The service cannot complete the request because a dependency or key source is unavailable
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            unavailable:
+              value:
+                message: Service unavailable
+                code: SERVICE_UNAVAILABLE
+  schemas:
+    HealthCheck:
+      type: object
+      required:
+        - status
+        - timestamp
+        - service
+      properties:
+        status:
+          type: string
+          example: ok
+        timestamp:
+          type: string
+          format: date-time
+        service:
+          type: string
+          example: qodi
+    PublicKeyResponse:
+      type: object
+      required:
+        - publicKey
+        - algorithm
+      properties:
+        publicKey:
+          type: string
+          description: PEM-encoded public key used by clients to encrypt Qodi payloads
+        algorithm:
+          type: string
+          enum:
+            - RSA-OAEP
+            - RSA-OAEP-SHA256
+            - RSA-OAEP-SHA384
+            - RSA-OAEP-SHA512
+          description: Identifier for the asymmetric encryption algorithm clients should use. `RSA-OAEP-SHA256` is the recommended default.
+          example: RSA-OAEP-SHA256
+    DecryptRequest:
+      type: object
+      required:
+        - qodiPayload
+      properties:
+        qodiPayload:
+          type: string
+          minLength: 1
+          description: Base64-encoded ciphertext produced from a Qodi payload encrypted with the published public key
+    DecryptSuccess:
+      type: object
+      required:
+        - success
+        - data
+        - exp
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          description: Original application payload carried inside the encrypted Qodi object
+        exp:
+          type: integer
+          minimum: 1
+          description: Original Unix expiration timestamp embedded in the encrypted payload
+    DecryptInvalid:
+      type: object
+      required:
+        - success
+        - error
+      properties:
+        success:
+          type: boolean
+          const: false
+        error:
+          type: string
+          const: TOKEN_INVALID
+          description: Opaque failure code used for malformed, undecryptable, or expired payloads
+    ServerTime:
+      type: object
+      required:
+        - epochMs
+        - iso
+      properties:
+        epochMs:
+          type: integer
+          minimum: 1
+          description: Current server time in epoch milliseconds
+        iso:
+          type: string
+          format: date-time
+          description: Current server time in ISO 8601 UTC format
+    ErrorResponse:
+      type: object
+      required:
+        - message
+      properties:
+        message:
+          type: string
+        code:
+          type: string
+    ValidationError:
+      type: object
+      required:
+        - message
+        - errors
+      properties:
+        message:
+          type: string
+          example: Validation error
+        errors:
+          type: array
+          items:
+            description: Validator-specific error entry

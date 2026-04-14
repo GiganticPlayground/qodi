@@ -1,0 +1,24 @@
+# Dependencies
+node_modules
+
+# Build outputs
+dist
+build
+coverage
+*.log
+
+# Generated files (auto-generated from OpenAPI)
+src/types/schema.d.ts
+
+# Lock files
+yarn.lock
+package-lock.json
+pnpm-lock.yaml
+
+# Git
+.git
+.husky
+
+# IDE
+.vscode
+.idea

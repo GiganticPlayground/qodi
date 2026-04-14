@@ -1,0 +1,62 @@
+{
+  "name": "qodi",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "index.js",
+  "license": "MIT",
+  "description": "Encrypted time-based QR code backend with asymmetric decryption and configurable bearer authentication",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/GiganticPlayground/qodi.git"
+  },
+  "scripts": {
+    "dev": "nodemon --exec tsx src/index.ts",
+    "start": "node --import=tsx src/index.ts",
+    "build": "rm -rf dist && tsc -p tsconfig.build.json && node scripts/fix-dist-esm-imports.js dist",
+    "setup": "bash scripts/setup.sh",
+    "generate": "npm run gen-types && npm run gen-controllers",
+    "gen-types": "npx openapi-typescript ./api/openapi.yaml -o ./src/types/schema.d.ts",
+    "gen-controllers": "node scripts/generate-controllers.js",
+    "gen:keys": "node scripts/generate-keys.js",
+    "test": "node --import=tsx --test tests/**/*.test.ts",
+    "docker:build": "docker compose build",
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down",
+    "docker:logs": "docker compose logs -f",
+    "lint": "eslint src --ext .ts",
+    "lint:fix": "eslint src --ext .ts --fix",
+    "format": "prettier --write \"src/**/*.ts\" \"api/**/*.yaml\" \"scripts/**/*.js\"",
+    "format:check": "prettier --check \"src/**/*.ts\" \"api/**/*.yaml\" \"scripts/**/*.js\"",
+    "type-check": "tsc --noEmit",
+    "validate": "npm run type-check && npm run lint && npm run format:check"
+  },
+  "dependencies": {
+    "@scalar/express-api-reference": "^0.9.7",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^5.1.0",
+    "express-openapi-validator": "^5.6.0",
+    "express-rate-limit": "^8.3.2",
+    "helmet": "^8.1.0",
+    "js-yaml": "^4.1.0",
+    "logra": "github:GiganticPlayground/logra#semver:^1.0.0",
+    "yaml": "^2.8.1",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/helmet": "^4.0.0",
+    "@types/node": "^24.9.2",
+    "@typescript-eslint/eslint-plugin": "^8.46.2",
+    "@typescript-eslint/parser": "^8.46.2",
+    "eslint": "^9.38.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-import": "^2.32.0",
+    "eslint-plugin-n": "^17.23.1",
+    "nodemon": "^3.1.10",
+    "prettier": "^3.6.2",
+    "ts-node": "^10.9.2",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3"
+  }
+}
