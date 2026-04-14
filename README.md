@@ -112,16 +112,26 @@ See the [Getting Started guide](docs/getting-started.md) for instructions on run
 | `QODI_PUBLIC_KEY_PATH` | Yes if `QODI_PUBLIC_KEY` unset | Filesystem path to the public key PEM. |
 | `QODI_CLOCK_SKEW_SECONDS` | No | Optional expiration grace window. Defaults to `0`. |
 
-## Supported QR Encryption Algorithms
+## Encryption Algorithm Primer
 
-Qodi currently supports these QR payload encryption algorithms:
+Qodi uses **RSA-OAEP**, an asymmetric encryption scheme. The client encrypts with the public key; only the server can decrypt with the private key. The four supported algorithm identifiers refer to the same RSA-OAEP scheme with different hash functions used internally by the padding:
 
-- `RSA-OAEP`
-- `RSA-OAEP-SHA256`
-- `RSA-OAEP-SHA384`
-- `RSA-OAEP-SHA512`
+| Algorithm | Hash | Recommendation |
+|---|---|---|
+| `RSA-OAEP` | SHA-1 | Avoid — SHA-1 is deprecated and will flag security audits |
+| `RSA-OAEP-SHA256` | SHA-256 | **Recommended default** — universally supported, no known weaknesses |
+| `RSA-OAEP-SHA384` | SHA-384 | Use only if a compliance framework explicitly requires it |
+| `RSA-OAEP-SHA512` | SHA-512 | Use only if a compliance framework explicitly requires it |
 
-Use `RSA-OAEP-SHA256` unless you have a specific interoperability reason to choose another supported OAEP hash. It is the default configuration, the algorithm used in the examples, and the recommended baseline for new deployments.
+A few things worth understanding when choosing:
+
+**The hash is not the binding security constraint.** Your RSA key length (2048-bit minimum, 4096-bit for long-lived keys) and the protection of the private key matter far more than whether you use SHA-256 or SHA-512 inside OAEP. The practical security difference between the SHA-256, SHA-384, and SHA-512 variants is negligible for this use case.
+
+**SHA-1 is the exception.** SHA-1 collision attacks are well-documented. Even though the theoretical attack path against OAEP specifically is different from signature forgery, SHA-1 is broadly deprecated across the industry and will draw scrutiny in audits. Avoid `RSA-OAEP` (the SHA-1 variant) in new deployments.
+
+**Client library support varies.** SHA-256 OAEP is exposed in every modern crypto library — the Web Crypto API, OpenSSL, PointyCastle, and others. SHA-384 and SHA-512 OAEP are less consistently available. If you are integrating a client you do not control, confirm it supports the algorithm before changing from the default.
+
+**`RSA-OAEP-SHA256` is the right default.** It is what the examples use, what the `.env.example` configures, and what you should use unless a specific external requirement forces another choice.
 
 ### Auth Settings
 

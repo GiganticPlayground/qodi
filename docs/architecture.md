@@ -268,6 +268,36 @@ Failure mode:
 
 ## 7. Request Flow
 
+```mermaid
+sequenceDiagram
+    participant Issuer as QR Issuer
+    participant Scanner as QR Scanner
+    participant Auth as Auth Middleware
+    participant Controller as Controller
+    participant Service as Qodi Service
+    participant Keys as Key Store
+
+    Issuer->>Auth: GET /qodi/publickey (Bearer token)
+    Auth-->>Issuer: 401 if invalid
+    Auth->>Controller: pass
+    Controller->>Service: getPublicKeyResponse()
+    Service->>Keys: load public key + algorithm
+    Keys-->>Service: PEM + algorithm
+    Service-->>Issuer: { publicKey, algorithm }
+
+    Issuer->>Issuer: build { data, exp }, encrypt with public key
+    Issuer->>Scanner: render QR code (base64 ciphertext)
+
+    Scanner->>Auth: POST /qodi/decrypt (Bearer token + qodiPayload)
+    Auth-->>Scanner: 401 if invalid
+    Auth->>Controller: pass
+    Controller->>Service: decryptQodiPayload(qodiPayload)
+    Service->>Keys: load private key
+    Keys-->>Service: PEM
+    Service->>Service: base64-decode → RSA-OAEP decrypt → parse JSON → check exp
+    Service-->>Scanner: { success: true, data, exp } or { success: false, error: "TOKEN_INVALID" }
+```
+
 ### 7.1 Public Key Retrieval
 
 1. Client calls `GET /qodi/publickey` with bearer auth.
