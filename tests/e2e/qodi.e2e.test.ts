@@ -367,7 +367,7 @@ test('qodi end-to-end flows', async (t) => {
       assert.equal(decryptExpired.status, 200);
       assert.deepEqual(await decryptExpired.json(), {
         success: false,
-        error: 'TOKEN_INVALID',
+        error: 'PAYLOAD_INVALID',
       });
     } finally {
       await stopService(service);
