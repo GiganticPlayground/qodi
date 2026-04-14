@@ -1,17 +1,10 @@
 import 'dart:convert';
-import 'dart:typed_data';
 
-import 'package:basic_utils/basic_utils.dart';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:mobile_scanner/mobile_scanner.dart';
-import 'package:pointycastle/asymmetric/oaep.dart';
-import 'package:pointycastle/asymmetric/rsa.dart';
-import 'package:pointycastle/digests/sha1.dart';
-import 'package:pointycastle/digests/sha256.dart';
-import 'package:pointycastle/digests/sha384.dart';
-import 'package:pointycastle/digests/sha512.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+
+import 'qodi_api.dart';
 
 void main() {
   runApp(const QodiFlutterDemoApp());
@@ -46,6 +39,7 @@ class QodiDemoPage extends StatefulWidget {
 }
 
 class _QodiDemoPageState extends State<QodiDemoPage> {
+  final _qodiApi = const QodiApi();
   final _apiBaseUrlController = TextEditingController(
     text: 'http://localhost:8080',
   );
@@ -86,31 +80,15 @@ class _QodiDemoPageState extends State<QodiDemoPage> {
     });
 
     try {
-      final response = await http.get(
-        Uri.parse('${_apiBaseUrlController.text}/qodi/publickey'),
-        headers: <String, String>{
-          'Authorization': 'Bearer ${_bearerTokenController.text}',
-        },
+      final response = await _qodiApi.fetchPublicKey(
+        baseUrl: _apiBaseUrlController.text,
+        bearerToken: _bearerTokenController.text,
       );
 
-      if (response.statusCode != 200) {
-        throw Exception(
-          'Public key request failed: HTTP ${response.statusCode} ${response.body}',
-        );
-      }
-
-      final payload = jsonDecode(response.body) as Map<String, dynamic>;
-      final publicKey = payload['publicKey'];
-      final algorithm = payload['algorithm'];
-
-      if (publicKey is! String || algorithm is! String) {
-        throw Exception('Public key response is missing expected fields.');
-      }
-
       setState(() {
-        _publicKeyPem = publicKey;
-        _algorithm = algorithm;
-        _status = 'Fetched public key using $algorithm.';
+        _publicKeyPem = response.publicKey;
+        _algorithm = response.algorithm;
+        _status = 'Fetched public key using ${response.algorithm}.';
       });
     } catch (error) {
       setState(() {
@@ -156,14 +134,12 @@ class _QodiDemoPageState extends State<QodiDemoPage> {
             DateTime.now().millisecondsSinceEpoch ~/ 1000 +
             (expiresInMinutes * 60),
       };
-      final plaintextJson = jsonEncode(plaintext);
-      final ciphertext = _encryptWithRsaOaep(
+      final generated = _qodiApi.generateQodiPayload(
         publicKeyPem: _publicKeyPem!,
         algorithm: _algorithm!,
-        plaintext: plaintextJson,
+        data: payloadData,
+        exp: plaintext['exp']! as int,
       );
-
-      final generated = base64Encode(ciphertext);
       setState(() {
         _plaintextPreview = const JsonEncoder.withIndent(
           '  ',
@@ -218,22 +194,11 @@ class _QodiDemoPageState extends State<QodiDemoPage> {
     });
 
     try {
-      final response = await http.post(
-        Uri.parse('${_apiBaseUrlController.text}/qodi/decrypt'),
-        headers: <String, String>{
-          'Authorization': 'Bearer ${_bearerTokenController.text}',
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode(<String, String>{'qodiPayload': qodiPayload}),
+      final payload = await _qodiApi.decryptQodiPayload(
+        baseUrl: _apiBaseUrlController.text,
+        bearerToken: _bearerTokenController.text,
+        qodiPayload: qodiPayload,
       );
-
-      if (response.statusCode != 200) {
-        throw Exception(
-          'Decrypt request failed: HTTP ${response.statusCode} ${response.body}',
-        );
-      }
-
-      final payload = jsonDecode(response.body);
       setState(() {
         _decryptPreview = const JsonEncoder.withIndent('  ').convert(payload);
         _status = 'Decrypt request completed.';
@@ -249,45 +214,6 @@ class _QodiDemoPageState extends State<QodiDemoPage> {
           _isDecrypting = false;
         });
       }
-    }
-  }
-
-  Uint8List _encryptWithRsaOaep({
-    required String publicKeyPem,
-    required String algorithm,
-    required String plaintext,
-  }) {
-    final publicKey = CryptoUtils.rsaPublicKeyFromPem(publicKeyPem);
-    final encoding = OAEPEncoding.withCustomDigest(
-      () => _hashDigestForAlgorithm(algorithm),
-      RSAEngine(),
-      Uint8List(0),
-    )..init(true, PublicKeyParameter<RSAPublicKey>(publicKey));
-
-    final input = Uint8List.fromList(utf8.encode(plaintext));
-    final maxInputBlockSize = encoding.inputBlockSize;
-
-    if (input.length > maxInputBlockSize) {
-      throw Exception(
-        'Payload too large for $algorithm with this key. Keep the payload small for this minimal demo.',
-      );
-    }
-
-    return encoding.process(input);
-  }
-
-  Digest _hashDigestForAlgorithm(String algorithm) {
-    switch (algorithm) {
-      case 'RSA-OAEP':
-        return SHA1Digest();
-      case 'RSA-OAEP-SHA256':
-        return SHA256Digest();
-      case 'RSA-OAEP-SHA384':
-        return SHA384Digest();
-      case 'RSA-OAEP-SHA512':
-        return SHA512Digest();
-      default:
-        throw Exception('Unsupported Qodi algorithm: $algorithm');
     }
   }
 

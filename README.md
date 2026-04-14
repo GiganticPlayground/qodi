@@ -29,7 +29,7 @@ QR encryption algorithms:
 Tradeoffs:
 - decrypting a QR requires a network round-trip to the backend
 - the backend and its private key are the trust anchor for the entire system
-- Qodi does not implement replay prevention or revocation for individual QR codes
+- Qodi does not implement replay prevention or revocation for individual QR codes, though the practical risk is reduced when deployments keep expirations short
 
 ## API Surfaces
 
@@ -40,6 +40,24 @@ Qodi exposes four HTTP surfaces:
 - `GET /health` provides an operational liveness endpoint for the service itself
 
 The Qodi endpoints are authenticated. `/health` is intentionally left unauthenticated for orchestration and health checks.
+
+## Request Flow
+
+```mermaid
+sequenceDiagram
+    participant Issuer as QR Issuer
+    participant Qodi as Qodi Backend
+    participant Scanner as QR Scanner
+
+    Issuer->>Qodi: GET /qodi/publickey
+    Qodi-->>Issuer: { publicKey, algorithm }
+    Issuer->>Issuer: Build { data, exp }
+    Issuer->>Issuer: Encrypt and base64-encode qodiPayload
+    Issuer->>Scanner: Render QR code
+    Scanner->>Qodi: POST /qodi/decrypt { qodiPayload }
+    Qodi->>Qodi: Decrypt and validate exp
+    Qodi-->>Scanner: success payload or TOKEN_INVALID
+```
 
 ## How It Works
 
@@ -67,46 +85,10 @@ Requests must send a JWT that Qodi validates against a configured static HMAC se
 
 Requests must send a JWT whose signing key is resolved from a remote JWKS endpoint. Qodi caches the JWKS and refreshes it when needed. This is the best fit for identity-provider-backed deployments with rotating keys.
 
-## Quick Start
+## Docs
 
-### 1. Install dependencies
-
-```bash
-npm install
-```
-
-### 2. Generate a local keypair
-
-```bash
-npm run gen:keys
-```
-
-This writes:
-- `config/keys/private-key.pem`
-- `config/keys/public-key.pem`
-
-### 3. Create your environment file
-
-```bash
-cp .env.example .env
-```
-
-At minimum, configure:
-- `QODI_AUTH_MODE`
-- the auth settings required by that mode
-- `QODI_PRIVATE_KEY_PATH` or `QODI_PRIVATE_KEY`
-- `QODI_PUBLIC_KEY_PATH` or `QODI_PUBLIC_KEY`
-
-### 4. Run locally
-
-```bash
-npm run gen-types
-npm run dev
-```
-
-Then open:
-- `http://localhost:8080/api-docs`
-- `http://localhost:8080/health`
+- [Getting Started](docs/getting-started.md) — step-by-step guide for running the backend with Docker Compose and running the Flutter demo app
+- [Architecture](docs/architecture.md) — implementation-oriented reference covering the API surface, auth modes, encryption model, request flow, and error handling
 
 ## Configuration
 
