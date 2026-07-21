@@ -40,6 +40,7 @@
     "helmet": "^8.1.0",
     "js-yaml": "^4.1.0",
     "logra": "github:GiganticPlayground/logra#semver:^1.0.0",
+    "reqcast": "github:GiganticPlayground/reqcast#semver:^1.0.0",
     "yaml": "^2.8.1",
     "zod": "^4.1.12"
   },

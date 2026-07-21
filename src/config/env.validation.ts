@@ -83,6 +83,7 @@ export const envSchema = z
       .pipe(z.number().int().positive())
       .optional()
       .default(300),
+    REQCAST_CONFIG: z.string().optional(),
   })
   .superRefine((value, ctx) => {
     if (!value.QODI_PRIVATE_KEY && !value.QODI_PRIVATE_KEY_PATH) {

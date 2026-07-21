@@ -14,7 +14,7 @@ import {
   errorHandlerMiddleware,
   requestContextMiddleware,
 } from './middlewares/index';
-import { logger } from './utils/index';
+import { buildAnalytics, logger } from './utils/index';
 
 export const apiSpecPath: string = join(process.cwd(), 'api/openapi.yaml');
 const apiSpecContent: string = readFileSync(apiSpecPath, 'utf8');
@@ -47,6 +47,12 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(requestContextMiddleware);
 
+const analytics = buildAnalytics();
+if (analytics?.enabled) {
+  app.use(analytics.middleware);
+  logger.info('request analytics enabled');
+}
+
 app.use(
   '/api-docs',
   helmet({
@@ -73,6 +79,17 @@ app.use('/qodi', authMiddleware);
 app.use(createOpenApiValidatorMiddleware(apiSpecPath));
 app.use(errorHandlerMiddleware);
 
-app.listen(config.QODI_PORT, () => {
+const server = app.listen(config.QODI_PORT, () => {
   logger.info(`Server is running on port ${config.QODI_PORT}`);
 });
+
+async function shutdown(signal: string): Promise<void> {
+  logger.info(`Received ${signal}, shutting down`);
+  // Drain in-flight requests first so their analytics records get dispatched,
+  // then flush/close the sinks before exiting.
+  await new Promise<void>((resolve) => server.close(() => resolve()));
+  if (analytics) await analytics.close();
+  process.exit(0);
+}
+process.on('SIGTERM', () => void shutdown('SIGTERM'));
+process.on('SIGINT', () => void shutdown('SIGINT'));

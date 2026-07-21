@@ -19,6 +19,9 @@ function getRouteGroup(path: string): string | null {
 
 export function requestContextMiddleware(req: Request, res: Response, next: NextFunction): void {
   const requestId = req.header('x-request-id') ?? randomUUID();
+  // Make the (possibly generated) id readable by downstream consumers such as
+  // the reqcast analytics middleware, which reads it from the request headers.
+  req.headers['x-request-id'] = requestId;
   const startedAt = Date.now();
 
   runLogContext(() => {
