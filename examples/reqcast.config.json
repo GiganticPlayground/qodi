@@ -1,0 +1,16 @@
+{
+  "enabled": true,
+  "sampleRate": 1,
+  "capture": { "requestBody": true, "responseBody": false },
+  "filters": { "includePaths": ["/qodi/**"], "excludePaths": ["/health", "/api-docs/**"] },
+  "format": {
+    "fields": {
+      "ts": "timestamp",
+      "requestId": "requestId",
+      "durationMs": "durationMs",
+      "request": { "method": "request.method", "path": "request.path", "ip": "request.ip" },
+      "response": { "status": "response.statusCode" }
+    }
+  },
+  "sinks": [{ "type": "log", "level": "info", "message": "request analytics" }]
+}
