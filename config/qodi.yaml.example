@@ -1,0 +1,43 @@
+# Qodi auth config (optional). Copy to config/qodi.yaml (or set QODI_CONFIG_PATH).
+#
+# When present, this file drives authentication via the shared token-weaver/auth
+# middleware and REPLACES the QODI_AUTH_MODE env-var path. It supports MULTIPLE
+# strategies, tried in order — the first that accepts a request wins — so one Qodi
+# can serve, e.g., internal service-to-service calls (a static token) AND client
+# JWTs (token-weaver) at the same time.
+#
+# Only auth lives here. Crypto settings (QODI_ALGORITHM, keys, clock skew) and
+# request analytics (REQCAST_CONFIG) remain env-driven.
+#
+# `${env:NAME}` is resolved from the environment at startup (fail-fast if unset) —
+# keep real secrets in env vars / Docker secrets, not in this file.
+
+# `auth` accepts a single strategy (object) or a list (array). Example list:
+auth:
+  # Internal callers (e.g. the IPB rules-engine → POST /qodi/decrypt).
+  - type: static
+    token: ${env:QODI_STATIC_TOKEN}
+    # Optional inline path allow/deny (a static token has no claims). Restrict this
+    # token to decrypt only:
+    paths:
+      whitelist:
+        - /qodi/decrypt
+
+  # Mobile/web clients presenting token-weaver-issued JWTs.
+  - type: jwks
+    issuer: token-weaver
+    jwks_url: ${env:QODI_JWKS_URL}
+    # audience: qodi-api
+    # requirements:                     # every entry must hold, else 403
+    #   - type: scope
+    #     value: qodi:decrypt
+    # paths:                            # claim-based allow/deny for JWTs
+    #   pathPrefix: /qodi
+    #   whitelistClaim: whitelist
+    #   blacklistClaim: blacklist
+
+# --- Single-strategy shorthand (alternative to the list above) ------------------
+# auth:
+#   type: hs256
+#   issuer: token-weaver
+#   secret: ${env:QODI_JWT_SECRET}

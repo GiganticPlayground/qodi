@@ -56,7 +56,12 @@ export const envSchema = z
         const parsed = parseInt(value, 10);
         return Number.isNaN(parsed) ? false : parsed;
       }),
-    QODI_AUTH_MODE: z.enum(['jwt-static', 'jwt-jwks', 'static-token']),
+    // Optional: only used by the env-driven (single-strategy) auth path. When a config file
+    // (QODI_CONFIG_PATH) is provided, auth is driven by that file instead and this may be unset.
+    // Startup fails fast if neither a config file nor QODI_AUTH_MODE is present (see auth wiring).
+    QODI_AUTH_MODE: z.enum(['jwt-static', 'jwt-jwks', 'static-token']).optional(),
+    // Path to an optional YAML auth config (multi-strategy). Default location checked if unset.
+    QODI_CONFIG_PATH: z.string().optional().default('config/qodi.yaml'),
     QODI_ALGORITHM: z.enum(supportedQodiAlgorithms).optional().default('RSA-OAEP-SHA256'),
     QODI_CLOCK_SKEW_SECONDS: z
       .string()

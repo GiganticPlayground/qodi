@@ -69,19 +69,35 @@ sequenceDiagram
 
 The expiration is protected because it lives inside the encrypted payload. A caller cannot extend the lifetime of a code without invalidating the ciphertext.
 
-## Authentication Modes
+## Authentication
 
-Exactly one auth mode is active per deployment.
+Auth can be configured two ways:
 
-### `static-token`
+1. **Env vars (single strategy)** — set `QODI_AUTH_MODE` and its fields (below). Exactly one
+   mode is active. Simplest for a single-issuer deployment.
+2. **Config file (multiple strategies)** — provide a YAML file at `QODI_CONFIG_PATH`
+   (default `config/qodi.yaml`; see [`config/qodi.yaml.example`](config/qodi.yaml.example)). When
+   present it drives auth via the shared [`token-weaver/auth`](https://github.com/GiganticPlayground/token-weaver)
+   middleware and `QODI_AUTH_MODE` is ignored. This lets one Qodi accept **several schemes at
+   once** — e.g. an internal static token for service-to-service `/qodi/decrypt` calls **and**
+   token-weaver JWTs from clients — with optional per-strategy scope/claim requirements and path
+   allow/deny (including inline path scoping for a static token).
+
+Startup fails fast if neither a config file nor `QODI_AUTH_MODE` is set.
+
+### Env modes
+
+Exactly one mode is active per deployment when using env vars.
+
+#### `static-token`
 
 Requests must send a pre-shared bearer token. This is the simplest deployment mode and works well for tightly controlled internal clients.
 
-### `jwt-static`
+#### `jwt-static`
 
 Requests must send a JWT that Qodi validates against a configured static HMAC secret or public key PEM. This is appropriate when your environment already issues JWTs and does not need JWKS rotation.
 
-### `jwt-jwks`
+#### `jwt-jwks`
 
 Requests must send a JWT whose signing key is resolved from a remote JWKS endpoint. Qodi caches the JWKS and refreshes it when needed. This is the best fit for identity-provider-backed deployments with rotating keys.
 
@@ -137,7 +153,8 @@ A few things worth understanding when choosing:
 
 | Variable | Required | Description |
 | --- | --- | --- |
-| `QODI_AUTH_MODE` | Yes | `static-token`, `jwt-static`, or `jwt-jwks` |
+| `QODI_CONFIG_PATH` | No | Path to a YAML auth config (multi-strategy). Default `config/qodi.yaml`. When the file exists it drives auth and the env vars below are ignored. |
+| `QODI_AUTH_MODE` | Unless a config file is used | `static-token`, `jwt-static`, or `jwt-jwks` |
 | `QODI_STATIC_TOKEN` | If `static-token` | Shared bearer token used for constant-time comparison |
 | `QODI_JWT_SECRET` | If `jwt-static` | HMAC secret or public key PEM for JWT validation |
 | `QODI_JWT_ALGORITHM` | No | JWT algorithm for `jwt-static`. Defaults to `HS256`. |
