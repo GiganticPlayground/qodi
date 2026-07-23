@@ -3,11 +3,13 @@ import { join } from 'path';
 
 import { apiReference } from '@scalar/express-api-reference';
 import cors from 'cors';
-import express from 'express';
+import express, { type RequestHandler } from 'express';
 import helmet from 'helmet';
+import { createAuthMiddleware } from 'token-weaver/auth';
 import YAML from 'yaml';
 
 import { config } from './config/index';
+import { loadQodiConfig } from './config/qodi-config';
 import {
   authMiddleware,
   createOpenApiValidatorMiddleware,
@@ -75,7 +77,28 @@ app.use(
   }),
 );
 
-app.use('/qodi', authMiddleware);
+// Auth selection (fail fast): a YAML config file (QODI_CONFIG_PATH) enables the shared
+// token-weaver/auth middleware with one or more strategies; otherwise fall back to the
+// env-driven single-mode auth (QODI_AUTH_MODE). One of the two must be configured.
+const qodiConfig = loadQodiConfig(config.QODI_CONFIG_PATH);
+let qodiAuth: RequestHandler;
+if (qodiConfig) {
+  qodiAuth = createAuthMiddleware({ strategies: qodiConfig.strategies });
+  logger.info(
+    `qodi auth: config file (${config.QODI_CONFIG_PATH}), ${qodiConfig.strategies.length} strateg${
+      qodiConfig.strategies.length === 1 ? 'y' : 'ies'
+    }`,
+  );
+} else if (config.QODI_AUTH_MODE) {
+  qodiAuth = authMiddleware;
+  logger.info(`qodi auth: env mode (${config.QODI_AUTH_MODE})`);
+} else {
+  throw new Error(
+    `No authentication configured: set QODI_AUTH_MODE or provide a config file at ${config.QODI_CONFIG_PATH}`,
+  );
+}
+
+app.use('/qodi', qodiAuth);
 app.use(createOpenApiValidatorMiddleware(apiSpecPath));
 app.use(errorHandlerMiddleware);
 
