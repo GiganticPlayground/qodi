@@ -1,9 +1,12 @@
 {
   "name": "qodi",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "type": "module",
   "main": "index.js",
   "license": "MIT",
+  "engines": {
+    "node": ">=24.22.1"
+  },
   "description": "Encrypted time-based QR code backend with asymmetric decryption and configurable bearer authentication",
   "repository": {
     "type": "git",
