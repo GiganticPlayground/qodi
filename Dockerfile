@@ -1,7 +1,7 @@
 # Qodi - Docker Image
 # Build TypeScript ahead of time and run the compiled output with Node.js
 
-FROM node:24.22.1-slim AS base
+FROM node:24-slim AS base
 
 # Install runtime dependencies used by the app and healthcheck
 RUN apt-get update && apt-get install -y \
